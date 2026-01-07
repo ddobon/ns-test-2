@@ -21,9 +21,11 @@ def get_redirect_uri():
     if os.getenv('REDIRECT_URI'):
         return os.getenv('REDIRECT_URI')
     if "google_oauth" in st.secrets and "redirect_uris" in st.secrets["google_oauth"]:
-        return st.secrets["google_oauth"]["redirect_uris"]    
+        uris = st.secrets["google_oauth"]["redirect_uris"]
+        # 리스트인 경우 첫 번째 항목을 반환, 문자열인 경우 그대로 반환
+        return uris[0] if isinstance(uris, list) else uris
     # 로컬 환경 - 기본 포트 사용
-    return "https://lng-ns-test2.streamlit.app"
+    return "http://localhost:8502"
 
 REDIRECT_URI = get_redirect_uri()
 
@@ -40,6 +42,7 @@ class GmailOAuthHandler:
         if "google_oauth" in st.secrets:
             # st.secrets는 도트 접근이 가능한 특수 객체이므로 dict로 변환
             creds_data = dict(st.secrets["google_oauth"])
+            st.write(f"현재 설정된 Redirect URI: {get_redirect_uri()}")
         # 2. 로컬 파일 확인 (개발 환경용)
         elif os.path.exists('credentials.json'):
             try:
