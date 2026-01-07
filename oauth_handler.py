@@ -268,15 +268,23 @@ class GmailOAuthHandler:
             
             return False
 
-    def send_email(self, to_email, subject, html_content):
+    def send_email(self, to_email, subject, html_content, from_name=None):
         """이메일 전송"""
         if not self.creds or not self.creds.valid:
             return False, "인증이 필요합니다."
 
         try:
             service = build('gmail', 'v1', credentials=self.creds)
+            
+            # 발신자 정보 가져오기
+            user_email = self.get_user_email()
+            
             message = MIMEMultipart('alternative')
             message['To'] = to_email
+            if from_name:
+                message['From'] = f"{from_name} <{user_email}>"
+            else:
+                message['From'] = user_email
             message['Subject'] = subject
             
             html_part = MIMEText(html_content, 'html', 'utf-8')

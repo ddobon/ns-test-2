@@ -120,13 +120,45 @@ def main():
         
         if os.path.exists(HISTORY_FILE):
             st.divider()
+            st.write("📊 **발송 히스토리 관리**")
+            
+            # 기존 히스토리 업로드
+            uploaded_history = st.file_uploader("기존 히스토리 파일 합치기 (CSV)", type=['csv'], key="history_uploader")
+            if uploaded_history:
+                try:
+                    uploaded_df = pd.read_csv(uploaded_history)
+                    if not os.path.exists(HISTORY_FILE):
+                        uploaded_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+                    else:
+                        # 중복 제거 로직 (주문번호 기준 등)을 넣을 수도 있지만, 일단 단순 병합
+                        existing_df = pd.read_csv(HISTORY_FILE)
+                        combined_df = pd.concat([existing_df, uploaded_df]).drop_duplicates().reset_index(drop=True)
+                        combined_df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+                    st.success("✅ 히스토리가 성공적으로 통합되었습니다!")
+                except Exception as e:
+                    st.error(f"히스토리 통합 오류: {e}")
+
+            # 다운로드 버튼
             with open(HISTORY_FILE, "rb") as f:
                 st.download_button(
-                    label="📥 누적된 히스토리 다운로드",
+                    label="📥 전체 히스토리 다운로드",
                     data=f,
-                    file_name="delivery_delay_history.csv",
-                    mime="text/csv"
+                    file_name=f"delivery_history_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
                 )
+        else:
+            st.divider()
+            st.info("아직 발송 히스토리가 없습니다. 메일을 발송하면 자동으로 생성됩니다.")
+            uploaded_history = st.file_uploader("기존 히스토리 파일 업로드 (CSV)", type=['csv'], key="history_init")
+            if uploaded_history:
+                try:
+                    df = pd.read_csv(uploaded_history)
+                    df.to_csv(HISTORY_FILE, index=False, encoding='utf-8-sig')
+                    st.success("✅ 히스토리 파일이 업로드되었습니다. 이제 이 파일에 기록이 누적됩니다!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"파일 업로드 오류: {e}")
 
     # OAuth 인증이 완료되지 않으면 메인 기능 비활성화
     if not oauth_handler:
