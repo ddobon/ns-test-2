@@ -32,18 +32,34 @@ class GmailOAuthHandler:
         self.service = None
         
     def _get_credentials_dict(self):
-        """credentials.json 로드 또는 secrets 확인"""
+        """secrets.toml 또는 credentials.json에서 설정을 로드"""
         creds_data = None
         
-        # Streamlit secrets 확인
+        # 1. Streamlit secrets 확인 (권장 방식)
         if "google_oauth" in st.secrets:
+            # st.secrets는 도트 접근이 가능한 특수 객체이므로 dict로 변환
             creds_data = dict(st.secrets["google_oauth"])
-        # 로컬 파일 확인
+        # 2. 로컬 파일 확인 (개발 환경용)
         elif os.path.exists('credentials.json'):
-            with open('credentials.json', 'r') as f:
-                creds_data = json.load(f)
-        else:
-            st.error("credentials.json 파일이 없습니다.")
+            try:
+                with open('credentials.json', 'r') as f:
+                    creds_data = json.load(f)
+            except Exception as e:
+                st.error(f"credentials.json 파일을 읽는 중 오류가 발생했습니다: {e}")
+                return None
+        
+        if not creds_data:
+            st.error("""
+            **OAuth 설정이 누락되었습니다.**
+            
+            배포 환경(Streamlit Cloud)에서는 `.streamlit/secrets.toml`의 내용을 
+            App Settings > Secrets에 아래 형식으로 입력해 주세요:
+            
+            ```toml
+            [google_oauth]
+            web = { client_id = "...", client_secret = "...", ... }
+            ```
+            """)
             return None
         
         # credentials.json 형식 확인 및 변환
