@@ -1,6 +1,5 @@
 import os
 import json
-import pickle
 import streamlit as st
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import Flow
@@ -12,7 +11,7 @@ from email.mime.multipart import MIMEMultipart
 
 # OAuth 2.0 스코프
 SCOPES = ['https://www.googleapis.com/auth/gmail.send']
-TOKEN_PICKLE = 'token.pickle'
+SESSION_TOKEN_KEY = 'gmail_oauth_token'
 
 def get_redirect_uri():
     """현재 환경에 맞는 redirect URI 반환"""
@@ -99,21 +98,20 @@ class GmailOAuthHandler:
             }
 
     def load_credentials(self):
-        """저장된 토큰 로드"""
-        if os.path.exists(TOKEN_PICKLE):
-            try:
-                with open(TOKEN_PICKLE, 'rb') as token:
-                    self.creds = pickle.load(token)
-            except Exception:
-                self.creds = None
+        """저장된 토큰 로드 (세션 상태에서)"""
+        if SESSION_TOKEN_KEY in st.session_state:
+            self.creds = st.session_state[SESSION_TOKEN_KEY]
+        else:
+            self.creds = None
 
         if self.creds and self.creds.expired and self.creds.refresh_token:
             try:
                 self.creds.refresh(Request())
-                with open(TOKEN_PICKLE, 'wb') as token:
-                    pickle.dump(self.creds, token)
+                st.session_state[SESSION_TOKEN_KEY] = self.creds
             except Exception:
                 self.creds = None
+                if SESSION_TOKEN_KEY in st.session_state:
+                    del st.session_state[SESSION_TOKEN_KEY]
 
         return self.creds is not None and self.creds.valid
 
@@ -321,8 +319,8 @@ class GmailOAuthHandler:
             flow.fetch_token(code=code)
             self.creds = flow.credentials
             
-            with open(TOKEN_PICKLE, 'wb') as token:
-                pickle.dump(self.creds, token)
+            # 세션에 저장 (파일 대신)
+            st.session_state[SESSION_TOKEN_KEY] = self.creds
             
             return True
                 
@@ -393,8 +391,8 @@ class GmailOAuthHandler:
         
     def logout(self):
         """로그아웃 처리"""
-        if os.path.exists(TOKEN_PICKLE):
-            os.remove(TOKEN_PICKLE)
+        if SESSION_TOKEN_KEY in st.session_state:
+            del st.session_state[SESSION_TOKEN_KEY]
         self.creds = None
         st.rerun()
 
