@@ -232,7 +232,7 @@ class GmailOAuthHandler:
                 include_granted_scopes='true'
             )
 
-            # 방법 1: 스타일링된 링크 (권장) - target="_top"으로 iframe 탈출
+            # 방법 1: 새 탭에서 열리는 스타일링된 링크 (권장)
             st.markdown(f'''
                 <style>
                 .google-login-btn {{
@@ -259,24 +259,29 @@ class GmailOAuthHandler:
                     box-shadow: 0 2px 4px rgba(66, 133, 244, 0.3);
                 }}
                 </style>
-                <a href="{auth_url}" target="_top" class="google-login-btn">
-                    🔐 Google 계정으로 로그인
+                <a href="{auth_url}" target="_blank" rel="noopener noreferrer" class="google-login-btn">
+                    🔐 Google 계정으로 로그인 (새 탭)
                 </a>
                 ''', unsafe_allow_html=True)
             
             st.markdown("---")
             
-            # 방법 2: URL 직접 표시 (대체 방안)
-            with st.expander("🔗 로그인이 안 되나요? 이 링크를 직접 클릭하세요"):
-                st.markdown(f"[Google 로그인 페이지 열기]({auth_url})")
-                st.caption("위 버튼이 작동하지 않으면 이 링크를 사용하세요.")
+            # 방법 2: 간단한 Markdown 링크 (대체 방안)
+            st.markdown(f"**또는:** [Google 로그인 페이지 열기 →]({auth_url})")
+            st.caption("👆 링크를 클릭하면 새 탭에서 로그인 페이지가 열립니다.")
             
             st.info("""
-            **💡 로그인 팁:**
-            - 버튼 클릭 후 새 탭에서 로그인 페이지가 열립니다
-            - 403 에러 발생 시 위의 "OAuth 설정 가이드"를 확인하세요
-            - 특히 **테스트 사용자 등록** 여부를 확인하세요
+            **💡 로그인 안내:**
+            1. 위 버튼을 클릭하면 **새 탭**에서 Google 로그인 페이지가 열립니다
+            2. 로그인 완료 후 **자동으로 이 페이지로 돌아옵니다**
+            3. 페이지가 새로고침되면 인증 완료!
+            
+            **❗ 403 에러 발생 시:**
+            - "OAuth 설정 가이드"를 펼쳐서 확인하세요
+            - 특히 **테스트 사용자 등록** 여부를 체크하세요
             """)
+            
+            st.warning("⚠️ **중요**: 로그인 후 이 탭을 닫지 말고 기다려주세요. 자동으로 인증이 완료됩니다.")
             
         except Exception as e:
             st.error(f"❌ OAuth Flow 생성 실패: {str(e)}")
