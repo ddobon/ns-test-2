@@ -20,7 +20,8 @@ def get_redirect_uri():
     # 환경 변수로 직접 설정된 경우 (배포 환경)
     if os.getenv('REDIRECT_URI'):
         return os.getenv('REDIRECT_URI')
-    
+    if "google_oauth" in st.secrets and "production_url" in st.secrets["google_oauth"]:
+        return st.secrets["google_oauth"]["production_url"]    
     # 로컬 환경 - 기본 포트 사용
     return "http://localhost:8502"
 
