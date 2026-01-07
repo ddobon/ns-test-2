@@ -23,7 +23,7 @@ def get_redirect_uri():
     if "google_oauth" in st.secrets and "redirect_uris" in st.secrets["google_oauth"]:
         return st.secrets["google_oauth"]["redirect_uris"]    
     # 로컬 환경 - 기본 포트 사용
-    return "http://localhost:8502"
+    return "https://lng-ns-test2.streamlit.app"
 
 REDIRECT_URI = get_redirect_uri()
 
