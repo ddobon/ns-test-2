@@ -3,26 +3,52 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import re
+from datetime import datetime
 
 class SaaSMailer:
-    def __init__(self, data_df, mail_list_df, template_content):
+    def __init__(self, data_df, mail_list_df, template_content, template_overdue_content=None):
         """
         Args:
             data_df: DataFrame from input_template.csv
             mail_list_df: DataFrame from mail_list.csv (or excel)
             template_content: String content of mail_template.md
+            template_overdue_content: String content of mail_template_overdue.md (optional)
         """
         self.df = data_df
         self.mail_list = mail_list_df
         self.template = template_content
+        self.template_overdue = template_overdue_content if template_overdue_content else template_content
         
     def filter_and_process(self):
-        """Web-friendly processing pipeline"""
+        """Web-friendly processing pipeline with OR logic for filters"""
         logs = []
         
-        # 1. Filter
         logs.append("🔍 Filtering data...")
-        filtered_df = self.df[self.df['배송지연 분류'].isna() | (self.df['배송지연 분류'] == '')].copy()
+        
+        # Create masks for both filter types independently
+        delay_mask = self.df['배송지연 분류'].isna() | (self.df['배송지연 분류'] == '')
+        
+        overdue_mask = pd.Series([False] * len(self.df), index=self.df.index)
+        if '출고예정일' in self.df.columns:
+            today = pd.Timestamp(datetime.now().date())
+            self.df['출고예정일_dt'] = pd.to_datetime(self.df['출고예정일'], errors='coerce')
+            overdue_mask = self.df['출고예정일_dt'] < today
+            logs.append(f"✓ Found 출고예정일 column, checking for overdue dates (before {today.date()})")
+        
+        # Combine with OR logic
+        combined_mask = delay_mask | overdue_mask
+        filtered_df = self.df[combined_mask].copy()
+        
+        # Tag each row with its filter type (prioritize overdue if both are true)
+        filtered_df['_filter_type'] = 'delay'  # default
+        filtered_df.loc[overdue_mask[combined_mask], '_filter_type'] = 'overdue'
+        
+        logs.append(f"✓ Delay filter matched: {delay_mask.sum()} rows")
+        logs.append(f"✓ Overdue filter matched: {overdue_mask.sum()} rows")
+        logs.append(f"✓ Total filtered (OR logic): {len(filtered_df)} rows from {len(self.df)} total rows")
+        
+        if len(filtered_df) == 0:
+            return [], logs
         
         required_columns = [
             '협력사코드', '협력사명', '상품코드', '상품명', 
@@ -34,24 +60,19 @@ class SaaSMailer:
         if missing_cols:
              raise ValueError(f"Missing required columns in CSV: {missing_cols}")
 
-        result_df = filtered_df[required_columns]
-        logs.append(f"✓ Filtered {len(result_df)} rows from {len(self.df)} total rows.")
+        # Group by partner AND filter type to send separate emails
+        grouped = filtered_df.groupby(['협력사명', '_filter_type'])
+        logs.append(f"✓ Grouped into {len(grouped)} partner-filter combinations.")
         
-        if len(result_df) == 0:
-            return [], logs
-
-        # 2. Group
-        grouped = result_df.groupby('협력사명')
-        logs.append(f"✓ Grouped into {len(grouped)} partners.")
-        
-        # 3. Generate Mails
+        # Generate Mails
         mail_items = []
         
-        for partner_name, group_df in grouped:
+        for (partner_name, filter_type), group_df in grouped:
             partner_code = group_df.iloc[0]['협력사코드']
+            is_overdue = (filter_type == 'overdue')
             
-            # Create content
-            mail_content = self.create_mail_content(partner_name, group_df)
+            # Create content (use overdue template if applicable)
+            mail_content = self.create_mail_content(partner_name, group_df[required_columns], is_overdue=is_overdue)
             
             # Find Email
             email = self.get_partner_email(partner_name, partner_code)
@@ -62,7 +83,8 @@ class SaaSMailer:
                 'email': email,
                 'content': mail_content,
                 'count': len(group_df),
-                'df': group_df # Keep ref for preview if needed
+                'df': group_df[required_columns],  # Keep ref for preview if needed
+                'is_overdue': is_overdue  # Track filter type
             })
             
         logs.append(f"✓ Generated {len(mail_items)} mail drafts.")
@@ -75,9 +97,13 @@ class SaaSMailer:
             table_rows.append(table_row)
         return '\n'.join(table_rows)
 
-    def create_mail_content(self, partner_name, group_df):
+    def create_mail_content(self, partner_name, group_df, is_overdue=False):
         table_content = self.create_table(group_df)
-        mail_content = self.template.replace(
+        
+        # Use overdue template if applicable
+        template = self.template_overdue if is_overdue else self.template
+        
+        mail_content = template.replace(
             '| {{상품코드}} | {{상품명}} | {{단품명}} | {{주문번호}} | {{운송장번호}} |',
             table_content
         )
@@ -203,7 +229,13 @@ class SaaSMailer:
                 return False, "No Email Address"
 
             msg = MIMEMultipart('alternative')
-            msg['Subject'] = f"[배송확인] {mail_item['partner_name']} 배송 지연 건 확인 요청 드립니다"
+            
+            # Use different subject based on filter type
+            if mail_item.get('is_overdue', False):
+                msg['Subject'] = f"[긴급] {mail_item['partner_name']} 출고예정일 경과 건 확인 요청 드립니다"
+            else:
+                msg['Subject'] = f"[배송확인] {mail_item['partner_name']} 배송 지연 건 확인 요청 드립니다"
+            
             msg['From'] = f"{smtp_config['from_name']} <{smtp_config['from_email']}>"
             msg['To'] = mail_item['email']
 

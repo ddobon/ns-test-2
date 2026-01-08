@@ -178,7 +178,11 @@ def main():
 
     # Optional Template
     with st.expander("3️⃣ 메일 템플릿 수정 (선택사항)"):
-        default_template = """**제목: [배송확인] {{협력사명}} 배송 지연 건 확인 요청 드립니다**
+        col_t1, col_t2 = st.columns(2)
+        
+        with col_t1:
+            st.markdown("**일반 배송지연 템플릿**")
+            default_template = """**제목: [배송확인] {{협력사명}} 배송 지연 건 확인 요청 드립니다**
 
 안녕하세요, {{협력사명}} 담당자님.
 
@@ -197,7 +201,31 @@ def main():
 
 바쁘시겠지만 빠른 확인 부탁드립니다.
 감사합니다."""
-        template_input = st.text_area("템플릿 내용", value=default_template, height=300)
+            template_input = st.text_area("템플릿 내용", value=default_template, height=300, key="template_normal")
+        
+        with col_t2:
+            st.markdown("**출고예정일 경과 템플릿**")
+            default_overdue_template = """**제목: [긴급] {{협력사명}} 출고예정일 경과 건 확인 요청 드립니다**
+
+안녕하세요, {{협력사명}} 담당자님.
+
+귀사의 일익 번창을 기원합니다.
+현재 아래 주문 건에 대하여 **출고예정일이 경과**하였으나 배송이 진행되지 않아 긴급 확인 요청드립니다.
+
+**[요청 사항]**
+**즉시 출고 가능 여부** 및 **정확한 출고 예정일**을 회신 부탁드립니다.
+품절로 취소가 필요할 경우 **품절**로 회신 부탁드립니다.
+
+**[출고예정일 경과 상세 정보]**
+
+| 상품코드 | 상품명 | 단품명 | 주문번호 | 운송장번호 |
+| :--- | :--- | :--- | :--- | :--- |
+| {{상품코드}} | {{상품명}} | {{단품명}} | {{주문번호}} | {{운송장번호}} |
+
+출고예정일이 지났으니 **긴급한 확인**이 필요합니다.
+빠른 회신 부탁드립니다.
+감사합니다."""
+            template_overdue_input = st.text_area("템플릿 내용", value=default_overdue_template, height=300, key="template_overdue")
 
     # Analyze Button
     if uploaded_file and mail_list_file:
@@ -210,7 +238,7 @@ def main():
                 else:
                     mail_list_df = pd.read_excel(mail_list_file)
                 
-                mailer = SaaSMailer(data_df, mail_list_df, template_input)
+                mailer = SaaSMailer(data_df, mail_list_df, template_input, template_overdue_input)
                 
                 with st.spinner("분석 중..."):
                     mail_items, logs = mailer.filter_and_process()
@@ -275,7 +303,7 @@ def main():
                         status_area.write(f"sending to {item['partner_name']}...")
                         
                         # OAuth를 사용한 메일 전송
-                        temp_mailer = SaaSMailer(None, None, None)
+                        temp_mailer = SaaSMailer(None, None, None, None)
                         html_content = temp_mailer.markdown_to_html(item['content'])
                         
                         # 제목 추출
@@ -309,7 +337,7 @@ def main():
 def render_preview(item):
     st.markdown(f"**수신**: {item['email'] if item['email'] else '❌ 이메일 없음'}")
     import streamlit.components.v1 as components
-    temp_mailer = SaaSMailer(None, None, None)
+    temp_mailer = SaaSMailer(None, None, None, None)
     html_content = temp_mailer.markdown_to_html(item['content'])
     with st.expander("HTML 미리보기", expanded=True):
         components.html(html_content, height=400, scrolling=True)
